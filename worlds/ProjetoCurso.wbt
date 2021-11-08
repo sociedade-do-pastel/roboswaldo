@@ -4,7 +4,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation 0.44194998661462565 0.7392055215967164 0.5081883569821907 4.284265817591152
-  position -1.067636246185349 2.5151049883634733 -0.31701304135775654
+  position -0.9622618831690337 2.3789761052252896 -0.004554831050154806
 }
 Background {
   skyColor [
@@ -38,17 +38,17 @@ RectangleArena {
   }
   wallHeight 0.05
 }
-TrackOne {
+DEF Track TrackOne {
   translation 0 -0.0075 0
 }
 DEF e-Puck E-puck {
-  hidden position_0_0 -1.1963882538854865e-15
-  hidden position_0_1 -1.4194518442399866e-16
   translation -1.32714e-13 -6.39682e-05 0.115
   rotation 2.9767368044306463e-06 0.999999999991132 2.9791082030022605e-06 1.5700000000088667
   controller "fglp4785"
   supervisor TRUE
   groundSensorsSlot [
+    Compass {
+    }
     DEF IR1 DistanceSensor {
       translation 0 0.003 0
       name "IR1"
