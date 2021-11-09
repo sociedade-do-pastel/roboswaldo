@@ -20,8 +20,6 @@ using namespace webots;
 #define MAX_SPEED 5.2
 #define WHEEL_DIFF 2.5
 
-static const float c_RotationSpeed{3.27};
-
 // control variables
 std::unique_ptr<Supervisor> supervisor = std::make_unique<Supervisor>();
 
@@ -231,7 +229,7 @@ int main(int argc, char** argv)
         robot_position = trans_field->getSFVec3f();
         track_position = track_field->getSFVec3f();
 
-        left_ground_sensorValue  = left_ground_sensor@->getValue();
+        left_ground_sensorValue  = left_ground_sensor->getValue();
         right_ground_sensorValue = right_ground_sensor->getValue();
 
         if (!found_line)
