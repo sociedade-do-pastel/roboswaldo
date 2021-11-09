@@ -229,8 +229,8 @@ int main(int argc, char** argv)
         robot_position = trans_field->getSFVec3f();
         track_position = track_field->getSFVec3f();
 
-        left_ground_sensorValue  = left_ground_sensor->getValue();
-        right_ground_sensorValue = right_ground_sensor->getValue();
+        left_ground_sensor_value  = left_ground_sensor->getValue();
+        right_ground_sensor_value = right_ground_sensor->getValue();
 
         if (!found_line)
             find_track(found_line, found_direction, track_position);
