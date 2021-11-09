@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include </usr/local/webots/include/controller/cpp/webots/Compass.hpp>
@@ -16,13 +17,15 @@ using namespace webots;
 #define TIME_STEP 128
 #define LEFT 0
 #define RIGHT 1
-#define MAX_SPEED 5
+#define MAX_SPEED 5.2
+#define WHEEL_DIFF 2.5
 
 static const float c_RotationSpeed{3.27};
 
-Supervisor* supervisor = new Supervisor();
-Node* robot_node       = supervisor->getFromDef("e-Puck");
-Node* track_node       = supervisor->getFromDef("Track");
+std::unique_ptr<Supervisor> supervisor = std::make_unique<Supervisor>();
+
+Node* robot_node = supervisor->getFromDef("e-Puck");
+Node* track_node = supervisor->getFromDef("Track");
 
 Field* trans_field = robot_node->getField("translation");
 Field* track_field = track_node->getField("translation");
@@ -34,6 +37,8 @@ DistanceSensor* leftGroundSensor  = supervisor->getDistanceSensor("IR1");
 DistanceSensor* rightGroundSensor = supervisor->getDistanceSensor("IR0");
 
 Compass* compass = supervisor->getCompass("compass");
+
+double velocities[2];
 
 void go_to(const double* objective);
 
@@ -50,20 +55,6 @@ float bearing_in_degrees()
     if (bearing < 0)
         bearing += 360;
     return bearing;
-}
-
-double distance_to(const double* objective)
-{
-    const double* current = get_robot_position();
-    double dx             = current[0] - objective[0];
-    double dz             = -current[2] * objective[2];
-    return sqrt(dx * dx + dz * dz);
-}
-
-double distance_to_time(double velocity, double distance)
-{
-    double speed = velocity * 0.0205;
-    return distance / speed;
 }
 
 double calculate_threshold(double property, double value, double threshold)
@@ -92,7 +83,7 @@ void rotate_heading(float theta)
 {
     if (calculate_threshold(theta, 0, 0.00001)) {
         double rotation_time
-            = abs(theta) / ((360 * (3.14 * 0.0205)) / (M_PI * 0.052)) + 0.2;
+            = abs(theta) / ((360 * (3.14 * 0.0205)) / (M_PI * 0.052)) + 0.1;
         if (theta > 0) {
             leftMotor->setVelocity(-0.5 * MAX_SPEED);
             rightMotor->setVelocity(0.5 * MAX_SPEED);
@@ -128,18 +119,10 @@ bool balance_heading(const double* objective)
     return false;
 }
 
-void walk(double time, double velocity, const double* objective)
+void walk(double velocity)
 {
-    leftMotor->setVelocity(velocity);
-    rightMotor->setVelocity(velocity);
-    double start_time = supervisor->getTime();
-    while (supervisor->getTime() - start_time < time) {
-        if (balance_heading(objective)) {
-            go_to(objective);
-            break;
-        }
-        supervisor->step(TIME_STEP);
-    }
+    velocities[LEFT]  = velocity;
+    velocities[RIGHT] = velocity;
 }
 
 void go_to(const double* objective)
@@ -149,19 +132,13 @@ void go_to(const double* objective)
     double turn    = turn_theta(heading, theta);
 
     rotate_heading(turn);
-
-    double distance = distance_to(objective);
-    double time     = distance_to_time(MAX_SPEED, distance);
-
-    walk(time, MAX_SPEED, objective);
+    walk(MAX_SPEED);
 }
 
 int main(int argc, char** argv)
 {
     double leftGroundSensorValue{0};
     double rightGroundSensorValue{0};
-
-    double velocities[2];
 
     leftMotor->setPosition(INFINITY);
     rightMotor->setPosition(INFINITY);
@@ -172,7 +149,7 @@ int main(int argc, char** argv)
     leftGroundSensor->enable(supervisor->getBasicTimeStep());
     rightGroundSensor->enable(supervisor->getBasicTimeStep());
 
-    compass->enable(TIME_STEP);
+    compass->enable(1);
 
     const double* robot_position{nullptr};
     const double* track_position{nullptr};
@@ -180,9 +157,8 @@ int main(int argc, char** argv)
     bool foundLine{false};
     bool foundDirection{false};
     bool aligned{false};
-    int wait{4};
-    int steps{20};
-
+    int steps{30};
+	
     while (supervisor->step(TIME_STEP) != -1) {
         robot_position = trans_field->getSFVec3f();
         track_position = track_field->getSFVec3f();
@@ -190,22 +166,15 @@ int main(int argc, char** argv)
         leftGroundSensorValue  = leftGroundSensor->getValue();
         rightGroundSensorValue = rightGroundSensor->getValue();
 
-        if (wait) {
-            --wait;
-            continue;
-        }
-
         if (!foundLine) {
-            if (rightGroundSensorValue > 5 || leftGroundSensorValue > 5) {
+			// the 9 top range is for the startup compass spike
+            if ((rightGroundSensorValue > 5 && rightGroundSensorValue < 9)
+                || (leftGroundSensorValue > 5 && leftGroundSensorValue < 9)) {
                 foundLine = true;
-                continue;
             }
 
-            if (!foundDirection) {
+            if (!foundDirection && !foundLine) {
                 go_to(track_position);
-
-                velocities[LEFT]  = MAX_SPEED;
-                velocities[RIGHT] = MAX_SPEED;
 
                 foundDirection = true;
             }
@@ -213,33 +182,49 @@ int main(int argc, char** argv)
         else if (!aligned) {
             if (rightGroundSensorValue < 5) {
                 velocities[LEFT]  = 0;
-                velocities[RIGHT] = 5.2;
+                velocities[RIGHT] = MAX_SPEED;
             }
             else if (leftGroundSensorValue < 5) {
-                velocities[LEFT]  = 5.2;
+                velocities[LEFT]  = MAX_SPEED;
                 velocities[RIGHT] = 0;
             }
             else {
-                velocities[LEFT]  = 5.2;
+                velocities[LEFT]  = MAX_SPEED;
                 velocities[RIGHT] = 0;
             }
 
             --steps;
-            if (steps == 0)
+            if (steps == 0) {
                 aligned = true;
+                steps   = 30;
+            }
         }
         else {
             if (rightGroundSensorValue < 5) {
-                velocities[LEFT]  = 2.7;
-                velocities[RIGHT] = 5.2;
+                velocities[LEFT]  = MAX_SPEED - WHEEL_DIFF;
+                velocities[RIGHT] = MAX_SPEED;
             }
             else if (leftGroundSensorValue < 5) {
-                velocities[LEFT]  = 5.2;
-                velocities[RIGHT] = 2.7;
+                velocities[LEFT]  = MAX_SPEED;
+                velocities[RIGHT] = MAX_SPEED - WHEEL_DIFF;
             }
             else {
                 velocities[LEFT]  = MAX_SPEED;
                 velocities[RIGHT] = MAX_SPEED;
+            }
+
+			// if the robots stays 30 steps out of the line, refind it
+            if (leftGroundSensorValue < 5 && rightGroundSensorValue < 5) {
+                --steps;
+            }
+            else {
+                steps = 30;
+            }
+            if (steps == 0) {
+                foundLine      = false;
+                foundDirection = false;
+                aligned        = false;
+                steps          = 30;
             }
         }
 
